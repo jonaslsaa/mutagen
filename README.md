@@ -29,8 +29,8 @@ new_dict, mutations = mutagen.mutate_dict(input_dict, user_message)
 
 # new_dict: {"name": "John", "age": 30}
 # mutations: [
-#     Mutation(type='set', key=['age'], value=30),
-#     Mutation(type='remove', key=['color'])
+#     Mutation(type='set', key='age', value=30),
+#     Mutation(type='remove', key='color')
 # ]
 ```
 
@@ -54,5 +54,5 @@ user_message = "I want to change my occupation to Data Scientist."
 new_person, mutations = mutagen.mutate_model(person, user_message)
 
 # new_person: Person(name='John', occupation='Data Scientist')
-# mutations: [Mutation(type='set', key=['occupation'], value='Data Scientist')]
+# mutations: [Mutation(type='set', key='occupation', value='Data Scientist')]
 ```
