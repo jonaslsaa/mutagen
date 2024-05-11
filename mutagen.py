@@ -1,9 +1,17 @@
 import json
 from pprint import pprint
-from typing import List, Literal, Set, Union
+from typing import List, Literal, Set, Tuple, Union
 from pydantic import BaseModel, Field
 import instructor
 
+class Mutation(BaseModel):
+    type: Literal["add", "set", "remove"]
+    key: str
+    new_value: Union[str, int, float, bool, None] = Field(description="The new value of the element, only for the 'add' and 'set' mutations")
+            
+class MutateDict(BaseModel):
+    mutations: List[Mutation] = Field(description=f"Mutations to apply to the data structure")
+    
 class Mutagen:
     def __init__(self, instrutor_client: instructor.Instructor, llm_model: str):
         self.client = instrutor_client
@@ -25,15 +33,7 @@ class Mutagen:
             max_retries=4
         )
 
-    def mutate_dict(self, input_dict: dict, user_message: str, extra_system_message: str | None = None, inform_data_type: str = "dictonary"):
-        class Mutation(BaseModel):
-            type: Literal["add", "set", "remove"]
-            key: str
-            new_value: Union[str, int, float, bool, None] = Field(description="The new value of the element, only for the 'add' and 'set' mutations")
-            
-        class MutateDict(BaseModel):
-            mutations: List[Mutation] = Field(description=f"The mutations to apply to the {inform_data_type}")
-        
+    def mutate_dict(self, input_dict: dict, user_message: str, extra_system_message: str | None = None, inform_data_type: str = "dictonary") -> Tuple[dict, List[Mutation]]:
         # Make a copy of the input dictionary so that the model can refer to it
         input_dict_str = json.dumps(input_dict)
         system_message = f"""You are a expert {inform_data_type} mutator, your goal is to mutate users data based on users message.
@@ -69,8 +69,11 @@ Mutations must match schema given."""
         new_list_indexed, mutations = self.mutate_dict(indexed_list, user_message, extra_system_message, inform_data_type="list")
         return list(new_list_indexed.values()), mutations
 
-    def mutate_model(self, input_model: BaseModel, user_message: str, extra_system_message: str | None = None):
+    def mutate_model(self, input_model: BaseModel, user_message: str, extra_system_message: str | None = None, pass_model_schema: bool = True):
         # Dump the model to a dictionary so that the model can refer to it
         input_model_dict = input_model.model_dump()
+        if pass_model_schema:
+            extra_system_message = f"{extra_system_message}\n\nUser's model schema:\n{input_model.model_json_schema()}\n"
+        # Here we might want to pass the model schema into the extra_system_message, this way the LLM model knows the types of the schema
         new_model_dict, mutations = self.mutate_dict(input_model_dict, user_message, extra_system_message, inform_data_type="model")
         return input_model.__class__.model_validate(new_model_dict), mutations
