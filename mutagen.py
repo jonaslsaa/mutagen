@@ -6,7 +6,7 @@ import instructor
 
 class Mutation(BaseModel):
     type: Literal["add", "set", "remove"]
-    key: str
+    key: Union[str, int, None] = Field(description="Key of the element to mutate")
     new_value: Union[str, int, float, bool, None] = Field(description="The new value of the element, only for the 'add' and 'set' mutations")
             
 class MutateDict(BaseModel):
