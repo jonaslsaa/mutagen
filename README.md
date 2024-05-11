@@ -10,7 +10,7 @@ MutaGen is a Python library that makes it easy to dynamically mutate data struct
 Efficient and Scalable: Built on top of Pydantic and leveraging the Instructor library, MutaGen provides a lightweight and efficient solution for dynamic data manipulation.
 * Simple API: Offers a simple and intuitive API for integrating MutaGen into your application, making it easy to get started with AI-powered data mutations.
 
-## Example
+## Examples
 
 ### Mutate a dictionary
 
@@ -56,3 +56,25 @@ new_person, mutations = mutagen.mutate_model(person, user_message)
 # new_person: Person(name='John', occupation='Data Scientist')
 # mutations: [Mutation(type='set', key='occupation', value='Data Scientist')]
 ```
+
+### Mutate a list or set
+
+```python
+# Define a list to mutate
+input_list = ["apple", "banana", "cherry"]
+
+# Define a user message to guide the mutation
+user_message = "I want to add a new fruit, orange."
+
+# Mutate the list using the user message
+new_list, mutations = mutagen.mutate_list(input_list, user_message)
+# Use mutagen.mutate_set() for sets
+
+# new_list: ["apple", "banana", "cherry", "orange"]
+# mutations: [Mutation(type='add', value='orange')]
+```
+
+## TODOs
+
+* [x] v0.1 Release
+* [ ] Nested data structures
