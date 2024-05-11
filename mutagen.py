@@ -6,7 +6,7 @@ import instructor
 
 class Mutation(BaseModel):
     type: Literal["add", "set", "remove"]
-    key: Union[str, int, None] = Field(description="Key of the element to mutate")
+    key: Union[str, int, None] = Field(description="Path to an element to mutate, for the 'set' and 'remove' mutations")
     new_value: Union[str, int, float, bool, None] = Field(description="The new value of the element, only for the 'add' and 'set' mutations")
             
 class MutateDict(BaseModel):
@@ -38,10 +38,12 @@ class Mutagen:
         input_dict_str = json.dumps(input_dict)
         system_message = f"""You are a expert {inform_data_type} mutator, your goal is to mutate users data based on users message.
 You will now be given a {inform_data_type} from the user. You will output mutations where you *can* add, set or remove fields. Decide how you should mutate the user's {inform_data_type}.
-Only operate on each field once. Do minimal changes. Never remove then add (set instead).
+Only operate on each field once. Never remove then add (set instead).
 Mutations must match schema given."""
         if extra_system_message:
             system_message = f"{extra_system_message}\n\n{system_message}"
+        if inform_data_type == "set":
+            system_message += "Mutation key is always integer. Don't create new ones!"
         user_message = f"User's existing {inform_data_type}:\n{input_dict_str}\n\nUser message:\n{user_message}"
         mutations = self.complete_model(MutateDict, user_message, system_message).mutations
         
