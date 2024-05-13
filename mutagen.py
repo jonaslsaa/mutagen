@@ -8,10 +8,19 @@ class Mutation(BaseModel):
     type: Literal["add", "set", "remove"]
     key: Union[str, int, None] = Field(description="Path to an element to mutate, for the 'set' and 'remove' mutations")
     new_value: Union[str, int, float, bool, None] = Field(description="The new value of the element, only for the 'add' and 'set' mutations")
-            
+
+class MutationForSetAndList(Mutation):
+    type: Literal["add", "set", "remove"]
+    key: Union[int, None] = Field(description="Path to an element to mutate, for the 'set' and 'remove' mutations")
+    new_value: Union[str, int, float, bool, None] = Field(description="The new value of the element, only for the 'add' and 'set' mutations")
+
 class MutateDict(BaseModel):
     mutations: List[Mutation] = Field(description=f"Mutations to apply to the data structure")
-    
+
+class MutateSetAndList(BaseModel):
+    mutations: List[MutationForSetAndList] = Field(description=f"Mutations to apply to the data structure")
+
+InformDataType = Literal["dictonary", "set", "list", "model"]
 class Mutagen:
     def __init__(self, instrutor_client: instructor.Instructor, llm_model: str):
         self.client = instrutor_client
@@ -32,8 +41,8 @@ class Mutagen:
             messages=messages,
             max_retries=4
         )
-
-    def mutate_dict(self, input_dict: dict, user_message: str, extra_system_message: str | None = None, inform_data_type: str = "dictonary") -> Tuple[dict, List[Mutation]]:
+    
+    def mutate_dict(self, input_dict: dict, user_message: str, extra_system_message: str | None = None, inform_data_type: InformDataType = "dictonary") -> Tuple[dict, List[Mutation]]:
         # Make a copy of the input dictionary so that the model can refer to it
         input_dict_str = json.dumps(input_dict)
         system_message = f"""You are a expert {inform_data_type} mutator, your goal is to mutate users data based on users message.
@@ -42,16 +51,18 @@ Only operate on each field once. Never remove then add (set instead).
 Mutations must match schema given."""
         if extra_system_message:
             system_message = f"{extra_system_message}\n\n{system_message}"
-        if inform_data_type == "set":
-            system_message += "Mutation key is always integer. Don't create new ones!"
+        mut_cls = MutateDict
+        if inform_data_type == "set" or inform_data_type == "list":
+            mut_cls = MutateSetAndList
         user_message = f"User's existing {inform_data_type}:\n{input_dict_str}\n\nUser message:\n{user_message}"
-        mutations = self.complete_model(MutateDict, user_message, system_message).mutations
+        mutations = self.complete_model(mut_cls, user_message, system_message).mutations
         
         # Create a new dictionary with the mutations
         new_dict = input_dict.copy()
         for mutation in mutations:
             if mutation.type == "add":
-                new_dict[mutation.key] = mutation.new_value
+                next_key = len(new_dict)
+                new_dict[next_key] = mutation.new_value
             elif mutation.type == "set":
                 new_dict[mutation.key] = mutation.new_value
             elif mutation.type == "remove":
