@@ -4,12 +4,20 @@ import openai
 from pydantic import BaseModel
 from mutagen import Mutagen
 
+'''
+# Using instructor client:
 instructor_client = instructor.from_openai(openai.OpenAI(
     base_url="https://api.deepinfra.com/v1/openai",
     api_key="...",
 ), mode=instructor.Mode.JSON)
 
-mutagen = Mutagen(instructor_client, "meta-llama/Meta-Llama-3-70B-Instruct")
+mutagen = Mutagen(instructor_client, "meta-llama/Meta-Llama-3-70B-Instruct", use_structured_output=False)
+'''
+
+openai_client = openai.OpenAI(
+    api_key="...",
+)
+mutagen = Mutagen(openai_client, "gpt-4o-mini-2024-07-18", use_structured_output=True)
 
 # Test mutations of sets
 facts = set(["I am a software engineer", "I like the blue color", "I am 25 years old"])

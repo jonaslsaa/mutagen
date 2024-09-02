@@ -1,6 +1,7 @@
 import json
 from pprint import pprint
-from typing import List, Literal, Set, Tuple, Union
+from typing import List, Literal, Set, Tuple, Union, TypeVar, Type
+import openai
 from pydantic import BaseModel, Field
 import instructor
 
@@ -21,12 +22,19 @@ class MutateSetAndList(BaseModel):
     mutations: List[MutationForSetAndList] = Field(description=f"Mutations to apply to the data structure")
 
 InformDataType = Literal["dictonary", "set", "list", "model"]
+
+TModel = TypeVar('T', bound=BaseModel)
+
 class Mutagen:
-    def __init__(self, instrutor_client: instructor.Instructor, llm_model: str):
-        self.client = instrutor_client
+    def __init__(self, client: instructor.Instructor | openai.OpenAI, llm_model: str, use_structured_output: bool = True):
+        self.client = client
+        self.is_openai_client = isinstance(client, openai.OpenAI)
+        self.use_structured_output = use_structured_output
+        if self.use_structured_output and not self.is_openai_client:
+            raise ValueError("Structured output is only supported with OpenAI client")
         self.llm_model = llm_model
 
-    def complete_model(self, model: BaseModel, user_message: str, extra_system_message: str | None = None) -> BaseModel:
+    def complete_model(self, model: Type[TModel], user_message: str, extra_system_message: str | None = None) -> TModel:
         messages = [
             {"role": "user", "content": user_message},
         ]
@@ -35,6 +43,13 @@ class Mutagen:
                 {"role": "system", "content": extra_system_message},
                 *messages,
             ]
+        if self.is_openai_client:
+            completion = self.client.beta.chat.completions.parse(
+                model=self.llm_model,
+                messages=messages,
+                response_format=model,
+            )
+            return completion.choices[0].message.parsed
         return self.client.chat.completions.create(
             model=self.llm_model,
             response_model=model,
