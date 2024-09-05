@@ -1,11 +1,11 @@
 from pprint import pprint
-import instructor
 import openai
 from pydantic import BaseModel
 from mutagen import Mutagen
 
 '''
 # Using instructor client:
+import instructor
 instructor_client = instructor.from_openai(openai.OpenAI(
     base_url="https://api.deepinfra.com/v1/openai",
     api_key="...",
@@ -27,7 +27,7 @@ print(" * Original facts:")
 pprint(facts)
 print(" * User message:", user_message)
 
-new_facts, mutations = mutagen.mutate_set(facts, user_message, "User stated a new fact about themselves, add them! Change or remove if they are incorrect, keep most. There shouln't be contradictions.")
+new_facts, mutations = mutagen.mutate(facts, user_message, "User stated a new fact about themselves, add them! Change or remove if they are incorrect, keep most. There shouln't be contradictions.")
 print(" * Mutations:")
 pprint(mutations)
 pprint(new_facts)
@@ -48,7 +48,7 @@ print(" * Original model:")
 pprint(model.model_dump())
 print(" * User message:", user_message)
 
-new_model, mutations = mutagen.mutate_model(model, user_message, "User stated a new fact about themselves, add them! Only change or remove if they are incorrect.")
+new_model, mutations = mutagen.mutate(model, user_message, "User stated a new fact about themselves, add them! Only change or remove if they are incorrect.")
 
 print(" * Mutations:")
 pprint(mutations)
