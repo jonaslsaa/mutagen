@@ -18,6 +18,7 @@ openai_client = openai.OpenAI(
     api_key="...",
 )
 mutagen = Mutagen(openai_client, "gpt-4o-mini-2024-07-18", use_structured_output=True)
+mutagen.config["on_disallowed_mutation"] = "raise" # If the model tries to add/delete from a model, raise an error
 
 # Test mutations of sets
 facts = set(["I am a software engineer", "I like the blue color", "I am 25 years old"])
@@ -40,9 +41,10 @@ class TestModel(BaseModel):
     age: int
     color: str
     is_student: bool
+    occupation: str | None = None
 
 model = TestModel(name="John", age=25, color="blue", is_student=True)
-user_message = "I am not a student, I am a teacher now!"
+user_message = "I am not a student, I have become a software engineer!"
 
 print(" * Original model:")
 pprint(model.model_dump())

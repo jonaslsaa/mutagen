@@ -1,6 +1,6 @@
 import json
 from pprint import pprint
-from typing import List, Literal, Set, Tuple, Union, TypeVar, Type
+from typing import List, Literal, Set, Tuple, TypedDict, Union, TypeVar, Type
 import openai
 from pydantic import BaseModel, Field
 import instructor
@@ -25,6 +25,14 @@ InformDataType = Literal["dictonary", "set", "list", "model"]
 
 TModel = TypeVar('T', bound=BaseModel)
 
+MutagenConfigDict = TypedDict('MutagenConfigDict', {
+    "on_disallowed_mutation": Literal["raise", "ignore"],
+})
+
+class DisallowedMutationError(Exception):
+    """Raised when a mutation is not allowed for a given data type."""
+    pass
+
 class Mutagen:
     def __init__(self, client: instructor.Instructor | openai.OpenAI, llm_model: str, use_structured_output: bool = True):
         """Initialize Mutagen with a client, model, and output preference."""
@@ -34,6 +42,9 @@ class Mutagen:
         if self.use_structured_output and not self.is_openai_client:
             raise ValueError("Structured output is only supported with OpenAI client")
         self.llm_model = llm_model
+        self.config: MutagenConfigDict = {
+            "on_disallowed_mutation": "raise",
+        }
 
     def complete_model(self, model: Type[TModel], user_message: str, system_message: str | None = None) -> TModel:
         """Complete a model based on user message and optional system message."""
@@ -60,11 +71,8 @@ class Mutagen:
             messages=messages,
             max_retries=4
         )
-    
-    def mutate_dict(self, input_dict: dict, user_message: str, extra_system_message: str | None = None, _inform_data_type: InformDataType = "dictonary") -> Tuple[dict, List[Mutation]]:
-        """Mutate a dictionary based on user message and return the new dict and mutations."""
-        # Make a copy of the input dictionary so that the model can refer to it
-        input_dict_str = json.dumps(input_dict)
+        
+    def _create_system_message(self, extra_system_message: str | None, _inform_data_type: InformDataType) -> str:
         system_message = f"""You are a expert {_inform_data_type} mutator, your goal is to mutate users data based on users message.
 You will now be given a {_inform_data_type} from the user. You will output mutations where you *can* add, set or delete fields. Decide how you should mutate the user's {_inform_data_type}.
 Only operate on each field once. Never delete then add (set instead).
@@ -75,17 +83,39 @@ Mutations must match schema given."""
             system_message = f"{system_message}\nKey must be an index (int) to the element in the list or set. (0-indexed)."
         if _inform_data_type != "model":
             system_message = f" 'add' mutation will add a new element (key property is ignored). {system_message}"
+        if _inform_data_type == "model":
+            system_message = f" only 'set' mutation is allowed. {system_message}"
         if extra_system_message:
             system_message = f"{extra_system_message}\n\n{system_message}"
+        return system_message
+    def mutate_dict(self, input_dict: dict, user_message: str, extra_system_message: str | None = None, _inform_data_type: InformDataType = "dictonary") -> Tuple[dict, List[Mutation]]:
+        """Mutate a dictionary based on user message and return the new dict and mutations."""
+        # Make a copy of the input dictionary so that the model can refer to it
+        input_dict_str = json.dumps(input_dict)
+        # Create a system message based on the data type
+        system_message = self._create_system_message(extra_system_message, _inform_data_type)
+        
+        # Use the appropriate mutation class based on the data type
+        # If the data type is a dict or a model, use MutateDict
         mut_cls = MutateDict
+        # If the data type is a set or a list, use MutateSetAndList
         if _inform_data_type == "set" or _inform_data_type == "list":
             mut_cls = MutateSetAndList
+        # Create user message with the existing data
         user_message = f"User's existing {_inform_data_type}:\n{input_dict_str}\n\nUser message:\n{user_message}"
+        # Get the mutations from the model
         mutations = self.complete_model(mut_cls, user_message, system_message).mutations
         
         # Create a new dictionary with the mutations
         new_dict = input_dict.copy()
+        # Apply the mutations to the new dictionary
         for mutation in mutations:
+            # Check if the mutation is allowed for the data type
+            if _inform_data_type == "model" and mutation.type != "set":
+                if self.config["on_disallowed_mutation"] == "raise":
+                    raise DisallowedMutationError(f"Mutation type '{mutation.type}' is not allowed for models, only 'set' is allowed.")
+                continue
+            # Apply the mutation based on the type
             if mutation.type == "add":
                 next_key = len(new_dict)
                 new_dict[next_key] = mutation.new_value
@@ -93,7 +123,7 @@ Mutations must match schema given."""
                 new_dict[mutation.key] = mutation.new_value
             elif mutation.type == "delete":
                 del new_dict[mutation.key]
-        
+        # Return the new dictionary and the mutations
         return new_dict, mutations
 
     def mutate_set(self, input_set: set, user_message: str, extra_system_message: str | None = None):
