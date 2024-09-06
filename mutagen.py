@@ -6,13 +6,13 @@ from pydantic import BaseModel, Field
 import instructor
 
 class Mutation(BaseModel):
-    type: Literal["add", "set", "remove"]
-    key: Union[str, int, None] = Field(description="Path to an element to mutate, for the 'set' and 'remove' mutations")
+    type: Literal["add", "set", "delete"]
+    key: Union[str, int, None] = Field(description="Path to an element to mutate, for the 'set' and 'delete' mutations")
     new_value: Union[str, int, float, bool, None] = Field(description="The new value of the element, only for the 'add' and 'set' mutations")
 
 class MutationForSetAndList(Mutation):
-    type: Literal["add", "set", "remove"]
-    key: Union[int, None] = Field(description="Path to an element to mutate, for the 'set' and 'remove' mutations")
+    type: Literal["add", "set", "delete"]
+    key: Union[int, None] = Field(description="Path to an element to mutate, for the 'set' and 'delete' mutations")
     new_value: Union[str, int, float, bool, None] = Field(description="The new value of the element, only for the 'add' and 'set' mutations")
 
 class MutateDict(BaseModel):
@@ -35,14 +35,14 @@ class Mutagen:
             raise ValueError("Structured output is only supported with OpenAI client")
         self.llm_model = llm_model
 
-    def complete_model(self, model: Type[TModel], user_message: str, extra_system_message: str | None = None) -> TModel:
+    def complete_model(self, model: Type[TModel], user_message: str, system_message: str | None = None) -> TModel:
         """Complete a model based on user message and optional system message."""
         messages = [
             {"role": "user", "content": user_message},
         ]
-        if extra_system_message:
+        if system_message:
             messages = [
-                {"role": "system", "content": extra_system_message},
+                {"role": "system", "content": system_message},
                 *messages,
             ]
         # Try to use the structured output first
@@ -66,9 +66,15 @@ class Mutagen:
         # Make a copy of the input dictionary so that the model can refer to it
         input_dict_str = json.dumps(input_dict)
         system_message = f"""You are a expert {_inform_data_type} mutator, your goal is to mutate users data based on users message.
-You will now be given a {_inform_data_type} from the user. You will output mutations where you *can* add, set or remove fields. Decide how you should mutate the user's {_inform_data_type}.
-Only operate on each field once. Never remove then add (set instead).
+You will now be given a {_inform_data_type} from the user. You will output mutations where you *can* add, set or delete fields. Decide how you should mutate the user's {_inform_data_type}.
+Only operate on each field once. Never delete then add (set instead).
 Mutations must match schema given."""
+        if _inform_data_type == "dictonary" or _inform_data_type == "model":
+            system_message = f"{system_message}\nKey must be a string to property in {_inform_data_type}."
+        if _inform_data_type == "list" or _inform_data_type == "set":
+            system_message = f"{system_message}\nKey must be an index (int) to the element in the list or set. (0-indexed)."
+        if _inform_data_type != "model":
+            system_message = f" 'add' mutation will add a new element (key property is ignored). {system_message}"
         if extra_system_message:
             system_message = f"{extra_system_message}\n\n{system_message}"
         mut_cls = MutateDict
@@ -85,7 +91,7 @@ Mutations must match schema given."""
                 new_dict[next_key] = mutation.new_value
             elif mutation.type == "set":
                 new_dict[mutation.key] = mutation.new_value
-            elif mutation.type == "remove":
+            elif mutation.type == "delete":
                 del new_dict[mutation.key]
         
         return new_dict, mutations
